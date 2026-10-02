@@ -24,7 +24,8 @@ public class Echo : MonoBehaviour
     public void Send()
     {
         // Send
-        string sendStr = inputField.text;
+        string sendStr = inputField.text.Replace("\u200B", "");
+        Debug.Log($"sendStr: {sendStr}, len: {sendStr.Length}");
         byte[] sendBytes = System.Text.Encoding.Default.GetBytes(sendStr);
         socket.Send(sendBytes);
 
