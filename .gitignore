@@ -1,8 +1,8 @@
-/Library/
-/Logs
-/Temp
-/UserSettings
-/obj
+/EchoClient/Library/
+/EchoClient/Logs
+/EchoClient/Temp
+/EchoClient/UserSettings
+/EchoClient/obj
 /.idea
 
 *.sln
