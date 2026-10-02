@@ -43,7 +43,7 @@ public class Echo : MonoBehaviour
         }
         catch (SocketException ex)
         {
-            Debug.Log($"Socket Connect fail: {ex.ToString()}");
+            Debug.Log($"Socket Connect fail: {ex.Message}");
         }
     }
 
@@ -60,7 +60,7 @@ public class Echo : MonoBehaviour
         }
         catch (SocketException ex)
         {
-            Debug.Log($"Socket Recive fail: {ex.ToString()}");
+            Debug.Log($"Socket Recive fail: {ex.Message}");
         }
     }
 
@@ -85,7 +85,7 @@ public class Echo : MonoBehaviour
         }
         catch (SocketException ex)
         {
-            Debug.Log($"Socket Send fail {ex.ToString()}");
+            Debug.Log($"Socket Send fail {ex.Message}");
         }
     }
 }
