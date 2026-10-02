@@ -5,9 +5,10 @@
 /EchoClient/obj
 /.idea
 
-*.sln
-*.slnx
-*.csproj
+/EchoServer/src/obj
+/EchoServer/src/bin
+
+
 .vsconfig
 .vs/
 .vscode/
