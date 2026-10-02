@@ -1,3 +1,4 @@
+using System;
 using System.Net.Sockets;
 using TMPro;
 using UnityEngine;
@@ -11,13 +12,56 @@ public class Echo : MonoBehaviour
     public TextMeshProUGUI inputField;
     public TextMeshProUGUI text;
 
+    // 接收缓冲区
+    byte[] readBuff = new byte[1024];
+    string recvStr = "";
+
+    public void Update()
+    {
+        // Unity中，只有主线程可以操作UI组件，所以ReceiveCallback只给recvStr赋值，主线程执行Update的时候再给Text赋值
+        text.text = recvStr;
+    }
+
     // 点击连接按钮
     public void Connection()
     {
         // Socket
         socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         //Connect
-        socket.Connect("127.0.0.1", 8888);
+        socket.BeginConnect("127.0.0.1", 8888, ConnectCallback, socket);
+    }
+
+    // Connect回调函数
+    public void ConnectCallback(IAsyncResult ar)
+    {
+        try
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            socket.EndConnect(ar);
+            Debug.Log("Socket Connect Succ");
+            socket.BeginReceive(readBuff, 0, 1024, 0, ReceiveCallback, socket);
+        }
+        catch (SocketException ex)
+        {
+            Debug.Log($"Socket Connect fail: {ex.ToString()}");
+        }
+    }
+
+    // Receive回调函数
+    public void ReceiveCallback(IAsyncResult ar)
+    {
+        try
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            int count = socket.EndReceive(ar);
+            recvStr = System.Text.Encoding.Default.GetString(readBuff, 0, count);
+            // 等下一个数据过来
+            socket.BeginReceive(readBuff, 0, 1024, 0, ReceiveCallback, socket);
+        }
+        catch (SocketException ex)
+        {
+            Debug.Log($"Socket Recive fail: {ex.ToString()}");
+        }
     }
 
     // 点击发送按钮
@@ -27,16 +71,21 @@ public class Echo : MonoBehaviour
         string sendStr = inputField.text.Replace("\u200B", "");
         Debug.Log($"sendStr: {sendStr}, len: {sendStr.Length}");
         byte[] sendBytes = System.Text.Encoding.Default.GetBytes(sendStr);
-        socket.Send(sendBytes);
+        socket.BeginSend(sendBytes, 0, sendBytes.Length, 0, SendCallback, socket);
+    }
 
-        // Recv
-        byte[] readBuff = new byte[1024];
-        int count = socket.Receive(readBuff);
-        string recvStr = System.Text.Encoding.Default.GetString(readBuff, 0, count);
-
-        text.text = recvStr;
-
-        // Close
-        socket.Close();
+    // Send回调函数
+    public void SendCallback(IAsyncResult ar)
+    {
+        try
+        {
+            Socket socket = (Socket)ar.AsyncState;
+            int count = socket.EndSend(ar);             // 只是成功发到了操作系统的发送缓冲区中，由操作系统负责完成数据的发送、确认、重传等步骤
+            Debug.Log($"Socket Send succ {count}");
+        }
+        catch (SocketException ex)
+        {
+            Debug.Log($"Socket Send fail {ex.ToString()}");
+        }
     }
 }
