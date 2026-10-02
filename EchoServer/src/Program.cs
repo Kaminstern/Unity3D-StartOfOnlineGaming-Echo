@@ -81,8 +81,10 @@ namespace EchoServer
 
                 string recvStr = System.Text.Encoding.Default.GetString(state.readBuff, 0, count);
                 byte[] sendBytes = System.Text.Encoding.Default.GetBytes($"{System.DateTime.Now.ToString()} 服务器收到了发来的信息：{recvStr}");
-
-                clientfd.Send(sendBytes);       // 减少代码量，不用异步
+                foreach (ClientState s in clients.Values)
+                {
+                    s.socket.Send(sendBytes);   // 减少代码量，不用异步
+                } 
                 clientfd.BeginReceive(state.readBuff, 0, 1024, 0, ReceiveCallback, state);
             }
             catch (SocketException ex)
