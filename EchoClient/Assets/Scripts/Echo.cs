@@ -18,8 +18,20 @@ public class Echo : MonoBehaviour
 
     public void Update()
     {
-        // Unity中，只有主线程可以操作UI组件，所以ReceiveCallback只给recvStr赋值，主线程执行Update的时候再给Text赋值
-        text.text = recvStr;
+        if (socket == null)
+        {
+            return;
+        }
+        if (socket.Poll(0, SelectMode.SelectRead))
+        {
+            byte[] readBuff = new Byte[1024];
+            int count = socket.Receive(readBuff);
+            string recvStr = System.Text.Encoding.Default.GetString(readBuff);
+
+            // Unity中，只有主线程可以操作UI组件，所以ReceiveCallback只给recvStr赋值，主线程执行Update的时候再给Text赋值
+            text.text = recvStr;
+        }
+        
     }
 
     // 点击连接按钮
@@ -39,7 +51,7 @@ public class Echo : MonoBehaviour
             Socket socket = (Socket)ar.AsyncState;
             socket.EndConnect(ar);
             Debug.Log("Socket Connect Succ");
-            socket.BeginReceive(readBuff, 0, 1024, 0, ReceiveCallback, socket);
+            //socket.BeginReceive(readBuff, 0, 1024, 0, ReceiveCallback, socket);
         }
         catch (SocketException ex)
         {
