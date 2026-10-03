@@ -5,6 +5,7 @@ namespace EchoServer
 {
     /// <summary>
     /// 服务器经历Socket、Bind、Listen三个步骤初始化监听Socket，然后调用BeginAccept开始异步处理客户端连接
+    /// 商业上为了做到性能极致，大多使用异步，或使用多线程模拟异步程序。后续书中提到的服务端使用select，尝试改为异步实现
     /// </summary>
     class MainClass
     {
@@ -28,27 +29,33 @@ namespace EchoServer
             listenfd.Listen(0);     // 参数backlog表示队列中最多可容纳等待接受的连接数，0表示不限制
             Console.WriteLine("[服务器] 启动成功");
 
+            // checkRead
+            List<Socket> checkRead = new List<Socket>();
+
             while (true)
             {
-                // 检查listenfd
-                if (listenfd.Poll(0, SelectMode.SelectRead))
-                {
-                    ReadListenfd(listenfd);
-                }
+                // 填充checkRead列表
+                checkRead.Clear();
+                checkRead.Add(listenfd);
                 foreach (ClientState s in clients.Values)
                 {
-                    Socket clientfd = s.socket;
-                    if (clientfd.Poll(0, SelectMode.SelectRead))
-                    {
-                        if (!ReadClientfds(clientfd))
-                        {
-                            break;
-                        }
-                    }
+                    checkRead.Add(s.socket);
                 }
 
-                // 防止CPU占用过高
-                System.Threading.Thread.Sleep(1);
+                // select
+                Socket.Select(checkRead, null, null, 1000);
+                // 检查可读对象
+                foreach(Socket s in checkRead)
+                {
+                    if(s == listenfd)
+                    {
+                        ReadListenfd(s);
+                    }
+                    else
+                    {
+                        ReadClientfds(s);
+                    }
+                }
             }
         }
 

@@ -1,4 +1,6 @@
+using NUnit.Framework;
 using System;
+using System.Collections.Generic;
 using System.Net.Sockets;
 using TMPro;
 using UnityEngine;
@@ -16,22 +18,32 @@ public class Echo : MonoBehaviour
     byte[] readBuff = new byte[1024];
     string recvStr = "";
 
+    List<Socket> checkRead = new List<Socket>();
+
     public void Update()
+    {
+        SelectCheckRead();
+    }
+
+    public void SelectCheckRead()
     {
         if (socket == null)
         {
             return;
         }
-        if (socket.Poll(0, SelectMode.SelectRead))
+        checkRead.Clear();
+        checkRead.Add(socket);
+        // select
+        Socket.Select(checkRead, null, null, 0);
+        foreach (Socket s in checkRead) 
         {
             byte[] readBuff = new Byte[1024];
-            int count = socket.Receive(readBuff);
-            string recvStr = System.Text.Encoding.Default.GetString(readBuff);
+            int count = s.Receive(readBuff);
+            string recvStr = System.Text.Encoding.Default.GetString(readBuff, 0 ,count);
 
             // Unity中，只有主线程可以操作UI组件，所以ReceiveCallback只给recvStr赋值，主线程执行Update的时候再给Text赋值
             text.text = recvStr;
         }
-        
     }
 
     // 点击连接按钮
