@@ -63,8 +63,10 @@ public class Echo : MonoBehaviour
             buffCount += count;
             // 处理二进制消息
             OnReceiveData();
+            // 等待，模拟粘包
+            System.Threading.Thread.Sleep(1000 * 30);
             string s = System.Text.Encoding.Default.GetString(readBuff, 0, count);
-            
+
             // 等下一个数据过来
             socket.BeginReceive(readBuff, buffCount, 1024 - buffCount, 0, ReceiveCallback, socket);
         }
@@ -79,14 +81,14 @@ public class Echo : MonoBehaviour
         Debug.Log($"[Revc 1] buffCount = {buffCount}");
         Debug.Log($"[Revc 2] readBuff = {BitConverter.ToString(readBuff)}");
         // 消息长度
-        if(buffCount < 2)       // 不足“消息长度”的长度
+        if (buffCount < 2)       // 不足“消息长度”的长度
         {
             return;
         }
         Int16 bodyLength = BitConverter.ToInt16(readBuff, 0);
         Debug.Log($"[Recv 3] bodyLength = {bodyLength}");
         // 消息体
-        if(buffCount < bodyLength + 2)      // 不足“消息长度”的长度加上“消息”的长度
+        if (buffCount < bodyLength + 2)      // 不足“消息长度”的长度加上“消息”的长度
         {
             return;
         }
