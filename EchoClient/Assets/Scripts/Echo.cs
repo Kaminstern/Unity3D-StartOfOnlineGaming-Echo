@@ -145,7 +145,7 @@ namespace EchoClient
 
             if (count == 1)
             {
-                socket.BeginSend(ba.bytes, ba.readIdx, ba.lenght, 0, SendCallback, socket);
+                socket.BeginSend(ba.bytes, ba.readIdx, ba.length, 0, SendCallback, socket);
             }
 
             Debug.Log($"[Send] {BitConverter.ToString(ba.bytes)}");
@@ -166,7 +166,7 @@ namespace EchoClient
                     ba = writeQueue.First();
                 }
                 ba.readIdx += count;
-                if (ba.lenght == 0)
+                if (ba.length == 0)
                 {
                     lock (writeQueue)
                     {
@@ -176,7 +176,7 @@ namespace EchoClient
                 }
                 if (ba != null)
                 {
-                    socket.BeginSend(ba.bytes, ba.readIdx, ba.lenght, 0, SendCallback, socket);
+                    socket.BeginSend(ba.bytes, ba.readIdx, ba.length, 0, SendCallback, socket);
                 }
             }
             catch (SocketException ex)

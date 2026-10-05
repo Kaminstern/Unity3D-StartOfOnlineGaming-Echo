@@ -55,6 +55,7 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\Echo.cs" />
     <Compile Include="Assets\Scripts\ByteArray.cs" />
+    <Compile Include="Assets\Scripts\TestByteArray.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
