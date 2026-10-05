@@ -27,7 +27,7 @@ namespace EchoClient
 
         private void Awake()
         {
-            
+
         }
 
         public void Update()
@@ -134,13 +134,21 @@ namespace EchoClient
 
             byte[] sendBytes = lenBytes.Concat(bodyBytes).ToArray();
             ByteArray ba = new ByteArray(sendBytes);
-            writeQueue.Enqueue(ba);
 
-            if(writeQueue.Count == 1)
+            int count = 0;
+            // 避免同一数据被发送多次
+            lock (writeQueue)
+            {
+                writeQueue.Enqueue(ba);
+                count = writeQueue.Count;
+            }
+
+            if (count == 1)
             {
                 socket.BeginSend(ba.bytes, ba.readIdx, ba.lenght, 0, SendCallback, socket);
             }
-            
+
+            Debug.Log($"[Send] {BitConverter.ToString(ba.bytes)}");
         }
 
         // Send回调函数
@@ -152,16 +160,21 @@ namespace EchoClient
                 // EndSend的处理
                 int count = socket.EndSend(ar);             // 只是成功发到了操作系统的发送缓冲区中，由操作系统负责完成数据的发送、确认、重传等步骤（所以可能出现粘包的情况）
                 // 判断发送是否完整
-                ByteArray ba = writeQueue.First();
-                ba.readIdx += count;
-                if(ba.lenght == 0)
+                ByteArray ba;
+                lock (writeQueue)
                 {
-                    Debug.Log($"[Send] {BitConverter.ToString(ba.bytes)}");
-
-                    writeQueue.Dequeue();
                     ba = writeQueue.First();
                 }
-                if(ba != null)
+                ba.readIdx += count;
+                if (ba.lenght == 0)
+                {
+                    lock (writeQueue)
+                    {
+                        writeQueue.Dequeue();
+                        ba = writeQueue.First();
+                    }
+                }
+                if (ba != null)
                 {
                     socket.BeginSend(ba.bytes, ba.readIdx, ba.lenght, 0, SendCallback, socket);
                 }
