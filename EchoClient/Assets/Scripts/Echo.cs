@@ -17,9 +17,8 @@ namespace EchoClient
         public TextMeshProUGUI text;
 
         // 接收缓冲区
-        byte[] readBuff = new byte[1024];
-        // 接收缓冲区长度
-        int buffCount = 0;
+        ByteArray readBuff = new ByteArray();
+
         string recvStr = "";
 
         // 定义缓冲区队列
@@ -53,7 +52,7 @@ namespace EchoClient
                 Socket socket = (Socket)ar.AsyncState;
                 socket.EndConnect(ar);
                 Debug.Log("Socket Connect Succ");
-                socket.BeginReceive(readBuff, buffCount, 1024 - buffCount, 0, ReceiveCallback, socket);
+                socket.BeginReceive(readBuff.bytes, readBuff.writeIdx, readBuff.remain, 0, ReceiveCallback, socket);
             }
             catch (SocketException ex)
             {
@@ -69,15 +68,22 @@ namespace EchoClient
                 Socket socket = (Socket)ar.AsyncState;
                 // 获取接收数据长度
                 int count = socket.EndReceive(ar);
-                buffCount += count;
+                readBuff.writeIdx += count;
                 // 处理二进制消息
                 OnReceiveData();
                 // 等待，模拟粘包
                 //System.Threading.Thread.Sleep(1000 * 10);
-                string s = System.Text.Encoding.Default.GetString(readBuff, 0, count);
+
+                // 继续接收数据（因为直接操作bytes，而不是用Write，所以需要手动维护扩容）
+                // 由于不知道下一次接收的数据量，需要判断缓冲区大小是否有一定的余量
+                if(readBuff.remain < 8)
+                {
+                    readBuff.MoveBytes();
+                    readBuff.ReSize(readBuff.length * 2);
+                }
 
                 // 等下一个数据过来
-                socket.BeginReceive(readBuff, buffCount, 1024 - buffCount, 0, ReceiveCallback, socket);
+                socket.BeginReceive(readBuff.bytes, readBuff.writeIdx, readBuff.remain, 0, ReceiveCallback, socket);
             }
             catch (SocketException ex)
             {
@@ -87,31 +93,34 @@ namespace EchoClient
 
         public void OnReceiveData()
         {
-            Debug.Log($"[Revc 1] buffCount = {buffCount}");
-            Debug.Log($"[Revc 2] readBuff = {BitConverter.ToString(readBuff)}");
+            Debug.Log($"[Revc 1] length = {readBuff.length}");
+            Debug.Log($"[Revc 2] readBuff = {readBuff.ToString()}");
             // 消息长度
-            if (buffCount < 2)       // 不足“消息长度”的长度
+            if (readBuff.length < 2)       // 不足“消息长度”的长度
             {
                 return;
             }
             // 手动处理使用小端方式发过来的“消息长度”
-            Int16 bodyLength = (short)((readBuff[1] << 8) | readBuff[0]);
+            Int16 bodyLength = readBuff.ReadInt16();
             Debug.Log($"[Recv 3] bodyLength = {bodyLength}");
             // 消息体
-            if (buffCount < bodyLength + 2)      // 不足“消息长度”的长度加上“消息”的长度
+            if (readBuff.length < bodyLength)      // 不足“消息长度”的长度加上“消息”的长度（readBuff.ReadInt16();中已经将“消息长度”的部分读完了，剩下的就是纯消息体，不用再加“消息长度”的长度）
             {
                 return;
             }
-            string s = System.Text.Encoding.UTF8.GetString(readBuff, 2, bodyLength);
+            byte[] stringByte = new byte[bodyLength];
+            readBuff.Read(stringByte, 0, bodyLength);
+            string s = System.Text.Encoding.UTF8.GetString(stringByte);
             Debug.Log($"[Recv 4] s = {s}");
-            //更新缓冲区
-            int start = 2 + bodyLength;
-            buffCount -= start;
-            Array.Copy(readBuff, start, readBuff, 0, buffCount);
-            Debug.Log($"[Recv 5] = buffCount = {buffCount}");
+
+            Debug.Log($"[Recv 5] readBuff = {readBuff.ToString()}");
+            // 消息处理
             recvStr = s + "\n" + recvStr;
             // 继续读消息
-            OnReceiveData();
+            if(readBuff.length > 2)
+            {
+                OnReceiveData();
+            }
         }
 
         // 点击发送按钮
