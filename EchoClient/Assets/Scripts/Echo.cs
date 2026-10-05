@@ -1,161 +1,175 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Sockets;
 using TMPro;
 using UnityEngine;
 
-public class Echo : MonoBehaviour
+namespace EchoClient
 {
-    // 定义套接字
-    Socket socket;
-    // UGUI
-    public TextMeshProUGUI inputField;
-    public TextMeshProUGUI text;
-
-    // 发送缓冲区
-    byte[] sendBytes = new byte[1024];
-    // 缓冲区偏移
-    int readIndex = 0;
-    // 缓冲区还没发出去的内容剩余长度
-    int length = 0;
-
-    // 接收缓冲区
-    byte[] readBuff = new byte[1024];
-    // 接收缓冲区长度
-    int buffCount = 0;
-    string recvStr = "";
-
-    List<Socket> checkRead = new List<Socket>();
-
-    public void Update()
+    public class Echo : MonoBehaviour
     {
-        // Unity中，只有主线程可以操作UI组件，所以ReceiveCallback只给recvStr赋值，主线程执行Update的时候再给Text赋值
-        text.text = recvStr;
-    }
+        // 定义套接字
+        Socket socket;
+        // UGUI
+        public TextMeshProUGUI inputField;
+        public TextMeshProUGUI text;
 
-    // 点击连接按钮
-    public void Connection()
-    {
-        // Socket
-        socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        //Connect
-        socket.BeginConnect("127.0.0.1", 8888, ConnectCallback, socket);
-    }
+        // 接收缓冲区
+        byte[] readBuff = new byte[1024];
+        // 接收缓冲区长度
+        int buffCount = 0;
+        string recvStr = "";
 
-    // Connect回调函数
-    public void ConnectCallback(IAsyncResult ar)
-    {
-        try
-        {
-            Socket socket = (Socket)ar.AsyncState;
-            socket.EndConnect(ar);
-            Debug.Log("Socket Connect Succ");
-            socket.BeginReceive(readBuff, buffCount, 1024 - buffCount, 0, ReceiveCallback, socket);
-        }
-        catch (SocketException ex)
-        {
-            Debug.Log($"Socket Connect fail: {ex.Message}");
-        }
-    }
+        // 定义缓冲区队列
+        Queue<ByteArray> writeQueue = new Queue<ByteArray>();
 
-    // Receive回调函数
-    public void ReceiveCallback(IAsyncResult ar)
-    {
-        try
+        private void Awake()
         {
-            Socket socket = (Socket)ar.AsyncState;
-            // 获取接收数据长度
-            int count = socket.EndReceive(ar);
-            buffCount += count;
-            // 处理二进制消息
-            OnReceiveData();
-            // 等待，模拟粘包
-            System.Threading.Thread.Sleep(1000 * 30);
-            string s = System.Text.Encoding.Default.GetString(readBuff, 0, count);
-
-            // 等下一个数据过来
-            socket.BeginReceive(readBuff, buffCount, 1024 - buffCount, 0, ReceiveCallback, socket);
-        }
-        catch (SocketException ex)
-        {
-            Debug.Log($"Socket Recive fail: {ex.Message}");
-        }
-    }
-
-    public void OnReceiveData()
-    {
-        Debug.Log($"[Revc 1] buffCount = {buffCount}");
-        Debug.Log($"[Revc 2] readBuff = {BitConverter.ToString(readBuff)}");
-        // 消息长度
-        if (buffCount < 2)       // 不足“消息长度”的长度
-        {
-            return;
-        }
-        // 手动处理使用小端方式发过来的“消息长度”
-        Int16 bodyLength = (short)((readBuff[1] << 8) | readBuff[0]);
-        Debug.Log($"[Recv 3] bodyLength = {bodyLength}");
-        // 消息体
-        if (buffCount < bodyLength + 2)      // 不足“消息长度”的长度加上“消息”的长度
-        {
-            return;
-        }
-        string s = System.Text.Encoding.UTF8.GetString(readBuff, 2, bodyLength);
-        Debug.Log($"[Recv 4] s = {s}");
-        //更新缓冲区
-        int start = 2 + bodyLength;
-        buffCount -= start;
-        Array.Copy(readBuff, start, readBuff, 0, buffCount);
-        Debug.Log($"[Recv 5] = buffCount = {buffCount}");
-        recvStr = s + "\n" + recvStr;
-        // 继续读消息
-        OnReceiveData();
-    }
-
-    // 点击发送按钮
-    public void Send()
-    {
-        // Send
-        string sendStr = inputField.text.Replace("\u200B", "");     // 去掉TMP的零宽字符
-        Debug.Log($"sendStr: {sendStr}, len: {sendStr.Length}");
-        // 组装协议
-        byte[] bodyBytes = System.Text.Encoding.Default.GetBytes(sendStr);
-        Int16 len = (Int16)bodyBytes.Length;
-        byte[] lenBytes = BitConverter.GetBytes(len);
-        // 手动判断大小端编码，使用小端存储，如果不是，则需要翻转Reverse
-        //（BitConverter.GetBytes中已经做了IsLittleEndian的判断，根据所处机型自动调整，只不过这里需要统一服务端和客户端的“消息长度”存储方式）
-        if (!BitConverter.IsLittleEndian)
-        {
-            Debug.Log("[Send] Reverse lenBytes");
-            lenBytes = (byte[])lenBytes.Reverse();
+            
         }
 
-        sendBytes = lenBytes.Concat(bodyBytes).ToArray();
-        length = sendBytes.Length;
-        readIndex = 0;
-        socket.BeginSend(sendBytes, 0, length, 0, SendCallback, socket);
-        Debug.Log($"[Send] {BitConverter.ToString(sendBytes)}");
-    }
-
-    // Send回调函数
-    public void SendCallback(IAsyncResult ar)
-    {
-        try
+        public void Update()
         {
-            Socket socket = (Socket)ar.AsyncState;
-            // EndSend的处理
-            int count = socket.EndSend(ar);             // 只是成功发到了操作系统的发送缓冲区中，由操作系统负责完成数据的发送、确认、重传等步骤（所以可能出现粘包的情况）
-            readIndex += count;
-            length -= count;
-            if(length > 0)
+            // Unity中，只有主线程可以操作UI组件，所以ReceiveCallback只给recvStr赋值，主线程执行Update的时候再给Text赋值
+            text.text = recvStr;
+        }
+
+        // 点击连接按钮
+        public void Connection()
+        {
+            // Socket
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            //Connect
+            socket.BeginConnect("127.0.0.1", 8888, ConnectCallback, socket);
+        }
+
+        // Connect回调函数
+        public void ConnectCallback(IAsyncResult ar)
+        {
+            try
             {
-                socket.BeginSend(sendBytes, readIndex, length, 0, SendCallback, socket);
+                Socket socket = (Socket)ar.AsyncState;
+                socket.EndConnect(ar);
+                Debug.Log("Socket Connect Succ");
+                socket.BeginReceive(readBuff, buffCount, 1024 - buffCount, 0, ReceiveCallback, socket);
             }
-            Debug.Log($"Socket Send succ {count}");
+            catch (SocketException ex)
+            {
+                Debug.Log($"Socket Connect fail: {ex.Message}");
+            }
         }
-        catch (SocketException ex)
+
+        // Receive回调函数
+        public void ReceiveCallback(IAsyncResult ar)
         {
-            Debug.Log($"Socket Send fail {ex.Message}");
+            try
+            {
+                Socket socket = (Socket)ar.AsyncState;
+                // 获取接收数据长度
+                int count = socket.EndReceive(ar);
+                buffCount += count;
+                // 处理二进制消息
+                OnReceiveData();
+                // 等待，模拟粘包
+                //System.Threading.Thread.Sleep(1000 * 10);
+                string s = System.Text.Encoding.Default.GetString(readBuff, 0, count);
+
+                // 等下一个数据过来
+                socket.BeginReceive(readBuff, buffCount, 1024 - buffCount, 0, ReceiveCallback, socket);
+            }
+            catch (SocketException ex)
+            {
+                Debug.Log($"Socket Recive fail: {ex.Message}");
+            }
+        }
+
+        public void OnReceiveData()
+        {
+            Debug.Log($"[Revc 1] buffCount = {buffCount}");
+            Debug.Log($"[Revc 2] readBuff = {BitConverter.ToString(readBuff)}");
+            // 消息长度
+            if (buffCount < 2)       // 不足“消息长度”的长度
+            {
+                return;
+            }
+            // 手动处理使用小端方式发过来的“消息长度”
+            Int16 bodyLength = (short)((readBuff[1] << 8) | readBuff[0]);
+            Debug.Log($"[Recv 3] bodyLength = {bodyLength}");
+            // 消息体
+            if (buffCount < bodyLength + 2)      // 不足“消息长度”的长度加上“消息”的长度
+            {
+                return;
+            }
+            string s = System.Text.Encoding.UTF8.GetString(readBuff, 2, bodyLength);
+            Debug.Log($"[Recv 4] s = {s}");
+            //更新缓冲区
+            int start = 2 + bodyLength;
+            buffCount -= start;
+            Array.Copy(readBuff, start, readBuff, 0, buffCount);
+            Debug.Log($"[Recv 5] = buffCount = {buffCount}");
+            recvStr = s + "\n" + recvStr;
+            // 继续读消息
+            OnReceiveData();
+        }
+
+        // 点击发送按钮
+        public void Send()
+        {
+            // Send
+            string sendStr = inputField.text.Replace("\u200B", "");     // 去掉TMP的零宽字符
+            Debug.Log($"sendStr: {sendStr}, len: {sendStr.Length}");
+            // 组装协议
+            byte[] bodyBytes = System.Text.Encoding.Default.GetBytes(sendStr);
+            Int16 len = (Int16)bodyBytes.Length;
+            byte[] lenBytes = BitConverter.GetBytes(len);
+            // 手动判断大小端编码，使用小端存储，如果不是，则需要翻转Reverse
+            //（BitConverter.GetBytes中已经做了IsLittleEndian的判断，根据所处机型自动调整，只不过这里需要统一服务端和客户端的“消息长度”存储方式）
+            if (!BitConverter.IsLittleEndian)
+            {
+                Debug.Log("[Send] Reverse lenBytes");
+                lenBytes = (byte[])lenBytes.Reverse();
+            }
+
+            byte[] sendBytes = lenBytes.Concat(bodyBytes).ToArray();
+            ByteArray ba = new ByteArray(sendBytes);
+            writeQueue.Enqueue(ba);
+
+            if(writeQueue.Count == 1)
+            {
+                socket.BeginSend(ba.bytes, ba.readIdx, ba.lenght, 0, SendCallback, socket);
+            }
+            
+        }
+
+        // Send回调函数
+        public void SendCallback(IAsyncResult ar)
+        {
+            try
+            {
+                Socket socket = (Socket)ar.AsyncState;
+                // EndSend的处理
+                int count = socket.EndSend(ar);             // 只是成功发到了操作系统的发送缓冲区中，由操作系统负责完成数据的发送、确认、重传等步骤（所以可能出现粘包的情况）
+                // 判断发送是否完整
+                ByteArray ba = writeQueue.First();
+                ba.readIdx += count;
+                if(ba.lenght == 0)
+                {
+                    Debug.Log($"[Send] {BitConverter.ToString(ba.bytes)}");
+
+                    writeQueue.Dequeue();
+                    ba = writeQueue.First();
+                }
+                if(ba != null)
+                {
+                    socket.BeginSend(ba.bytes, ba.readIdx, ba.lenght, 0, SendCallback, socket);
+                }
+            }
+            catch (SocketException ex)
+            {
+                Debug.Log($"Socket Send fail {ex.Message}");
+            }
         }
     }
 }
