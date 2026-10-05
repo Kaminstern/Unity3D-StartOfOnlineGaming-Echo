@@ -13,6 +13,13 @@ public class Echo : MonoBehaviour
     public TextMeshProUGUI inputField;
     public TextMeshProUGUI text;
 
+    // 发送缓冲区
+    byte[] sendBytes = new byte[1024];
+    // 缓冲区偏移
+    int readIndex = 0;
+    // 缓冲区还没发出去的内容剩余长度
+    int length = 0;
+
     // 接收缓冲区
     byte[] readBuff = new byte[1024];
     // 接收缓冲区长度
@@ -123,8 +130,10 @@ public class Echo : MonoBehaviour
             lenBytes = (byte[])lenBytes.Reverse();
         }
 
-        byte[] sendBytes = lenBytes.Concat(bodyBytes).ToArray();
-        socket.BeginSend(sendBytes, 0, sendBytes.Length, 0, SendCallback, socket);
+        sendBytes = lenBytes.Concat(bodyBytes).ToArray();
+        length = sendBytes.Length;
+        readIndex = 0;
+        socket.BeginSend(sendBytes, 0, length, 0, SendCallback, socket);
         Debug.Log($"[Send] {BitConverter.ToString(sendBytes)}");
     }
 
@@ -134,7 +143,14 @@ public class Echo : MonoBehaviour
         try
         {
             Socket socket = (Socket)ar.AsyncState;
+            // EndSend的处理
             int count = socket.EndSend(ar);             // 只是成功发到了操作系统的发送缓冲区中，由操作系统负责完成数据的发送、确认、重传等步骤（所以可能出现粘包的情况）
+            readIndex += count;
+            length -= count;
+            if(length > 0)
+            {
+                socket.BeginSend(sendBytes, readIndex, length, 0, SendCallback, socket);
+            }
             Debug.Log($"Socket Send succ {count}");
         }
         catch (SocketException ex)
