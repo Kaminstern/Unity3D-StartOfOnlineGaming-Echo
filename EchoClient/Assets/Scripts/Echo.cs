@@ -21,6 +21,9 @@ namespace EchoClient
 
         string recvStr = "";
 
+        // 判断当前是否需要关闭连接（此时可能还有没法完的数据，不能直接调用socket.Close()
+        bool isClosing = false;
+
         // 定义缓冲区队列
         Queue<ByteArray> writeQueue = new Queue<ByteArray>();
 
@@ -126,6 +129,11 @@ namespace EchoClient
         // 点击发送按钮
         public void Send()
         {
+            // 已经调用了socket.Close()，不让再给缓存队列添加新内容了
+            if (isClosing)
+            {
+                return;
+            }
             // Send
             string sendStr = inputField.text.Replace("\u200B", "");     // 去掉TMP的零宽字符
             Debug.Log($"sendStr: {sendStr}, len: {sendStr.Length}");
@@ -187,10 +195,28 @@ namespace EchoClient
                 {
                     socket.BeginSend(ba.bytes, ba.readIdx, ba.length, 0, SendCallback, socket);
                 }
+                else if(isClosing)
+                {
+                    socket.Close();
+                }
             }
             catch (SocketException ex)
             {
                 Debug.Log($"Socket Send fail {ex.Message}");
+            }
+        }
+
+        // 关闭连接
+        public void Close()
+        {
+            // 还有数据在缓冲队列中，没有发完
+            if(writeQueue.Count > 0)
+            {
+                isClosing = true;
+            }
+            else
+            {
+                socket.Close();
             }
         }
     }
