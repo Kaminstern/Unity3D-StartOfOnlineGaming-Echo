@@ -85,7 +85,8 @@ public class Echo : MonoBehaviour
         {
             return;
         }
-        Int16 bodyLength = BitConverter.ToInt16(readBuff, 0);
+        // 手动处理使用小端方式发过来的“消息长度”
+        Int16 bodyLength = (short)((readBuff[1] << 8) | readBuff[0]);
         Debug.Log($"[Recv 3] bodyLength = {bodyLength}");
         // 消息体
         if (buffCount < bodyLength + 2)      // 不足“消息长度”的长度加上“消息”的长度
@@ -114,6 +115,14 @@ public class Echo : MonoBehaviour
         byte[] bodyBytes = System.Text.Encoding.Default.GetBytes(sendStr);
         Int16 len = (Int16)bodyBytes.Length;
         byte[] lenBytes = BitConverter.GetBytes(len);
+        // 手动判断大小端编码，使用小端存储，如果不是，则需要翻转Reverse
+        //（BitConverter.GetBytes中已经做了IsLittleEndian的判断，根据所处机型自动调整，只不过这里需要统一服务端和客户端的“消息长度”存储方式）
+        if (!BitConverter.IsLittleEndian)
+        {
+            Debug.Log("[Send] Reverse lenBytes");
+            lenBytes = (byte[])lenBytes.Reverse();
+        }
+
         byte[] sendBytes = lenBytes.Concat(bodyBytes).ToArray();
         socket.BeginSend(sendBytes, 0, sendBytes.Length, 0, SendCallback, socket);
         Debug.Log($"[Send] {BitConverter.ToString(sendBytes)}");
